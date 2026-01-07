@@ -7,7 +7,7 @@ import threading
 import time
 from typing import List, Tuple
 
-import myHakathon.protocol as P
+import protocol as P
 
 DEFAULT_UDP_PORT = 13117  # common in similar assignments; can be overridden
 BROADCAST_ADDR = "255.255.255.255"
