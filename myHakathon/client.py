@@ -5,7 +5,7 @@ import socket
 import time
 from typing import Tuple
 
-import protocol as P
+import myHakathon.protocol as P
 
 DEFAULT_UDP_PORT = 13117  # must match server broadcast target
 BIND_ADDR = "0.0.0.0"
