@@ -44,19 +44,21 @@ def listen_for_offer(udp_port: int, timeout: float = 0.0) -> Tuple[str, int, str
     """
     Returns: (server_ip, tcp_port, server_name)
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((BIND_ADDR, udp_port))
-    if timeout > 0:
-        s.settimeout(timeout)
+    s.bind(('', udp_port))
+    # if timeout > 0:
+    #     s.settimeout(timeout)
     print("Client started, listening for offer requests...")
     while True:
-        data, (ip, _port) = s.recvfrom(2048)
+        data, (ip, _port) = s.recvfrom(1024)
+        print(f"Received UDP packet from {ip}")
         offer = P.unpack_offer(data)
         if offer:
             print(f"Received offer from {ip} (server='{offer.server_name}', tcp_port={offer.tcp_port})")
             s.close()
             return ip, offer.tcp_port, offer.server_name
+        #     return ip, offer.tcp_port, offer.server_name
 
 def play_session(server_ip: str, tcp_port: int, team_name: str, rounds: int) -> Tuple[int, int, int]:
     """
@@ -70,7 +72,7 @@ def play_session(server_ip: str, tcp_port: int, team_name: str, rounds: int) -> 
     sock.sendall(P.pack_request(rounds, team_name))
 
     for r in range(1, rounds + 1):
-        print(f"\n=== Round {r}/{rounds} ===")
+        print(f"\n\033[33m=== Round {r}/{rounds} ===\033[0m")
 
         # State:
         # Expect initial 3 server updates: player card, player card, dealer upcard
@@ -120,13 +122,13 @@ def play_session(server_ip: str, tcp_port: int, team_name: str, rounds: int) -> 
             if player_sum > 21:
                 res, rank, suit = recv_update()
                 if res == P.RES_LOSS:
-                    print("Result: LOSS (bust)")
+                    print("Result: \033[31mLOSS (bust)\033[0m")
                     losses += 1
                 elif res == P.RES_TIE:
-                    print("Result: TIE")
+                    print("Result: \033[34mTIE\033[0m")
                     ties += 1
                 else:
-                    print("Result: WIN")
+                    print("Result: \033[32mWIN\033[0m")
                     wins += 1
                 # round over
                 break
@@ -148,13 +150,13 @@ def play_session(server_ip: str, tcp_port: int, team_name: str, rounds: int) -> 
 
                 # Final result message (rank likely 0)
                 if res == P.RES_WIN:
-                    print("Result: WIN")
+                    print("Result: \033[32mWIN\033[0m")
                     wins += 1
                 elif res == P.RES_LOSS:
-                    print("Result: LOSS")
+                    print("Result: \033[31mLOSS\033[0m")
                     losses += 1
                 else:
-                    print("Result: TIE")
+                    print("Result: \033[34mTIE\033[0m")
                     ties += 1
                 break
 
@@ -169,12 +171,12 @@ def main():
 
     while True:
         rounds = prompt_rounds()
-        server_ip, tcp_port, server_name = listen_for_offer(args.udp_port, 60)
+        server_ip, tcp_port, server_name = listen_for_offer(args.udp_port)
         try:
             wins, losses, ties = play_session(server_ip, tcp_port, args.team, rounds)
             played = wins + losses + ties
             win_rate = (wins / played) if played else 0.0
-            print(f"\nFinished playing {played} rounds, win rate: {win_rate:.3f} (W={wins}, L={losses}, T={ties})")
+            print(f"\n\033[1;34mFinished playing {played} rounds, win rate: {win_rate:.3f} (W={wins}, L={losses}, T={ties})\033[0m")
         except (ConnectionError, OSError) as e:
             print(f"Connection/session error: {e}")
         print("\nReturning to listen for offers...\n")

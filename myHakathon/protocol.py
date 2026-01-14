@@ -13,7 +13,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-MAGIC_COOKIE = 0xABCDDCBA
+MAGIC_COOKIE = 0xabcddcba
 
 MSG_OFFER   = 0x2
 MSG_REQUEST = 0x3

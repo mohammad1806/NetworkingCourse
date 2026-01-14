@@ -10,7 +10,6 @@ from typing import List, Tuple
 import protocol as P
 
 DEFAULT_UDP_PORT = 13117  # common in similar assignments; can be overridden
-BROADCAST_ADDR = "255.255.255.255"
 
 Card = Tuple[int, int]  # (rank 1..13, suit 0..3)
 
@@ -54,7 +53,7 @@ def handle_client(conn: socket.socket, addr, team_name: str) -> None:
         print(f"[{ip}:{port}] Connected client '{req.client_name}' requested {rounds} rounds.")
 
         for round_idx in range(1, rounds + 1):
-            print(f"[{ip}:{port}] --- Round {round_idx}/{rounds} --- for '{req.client_name}'")
+            print(f"[{ip}:{port}] \033[33m--- Round {round_idx}/{rounds} --- for '\033[0m\033[34m{req.client_name}\033[0m\033[33m' ---\033[0m")
             deck = fresh_shuffled_deck()
 
             player: List[Card] = [deck.pop(), deck.pop()]
@@ -92,7 +91,7 @@ def handle_client(conn: socket.socket, addr, team_name: str) -> None:
                 print(f"[{ip}:{port}] Player hits: {P.card_str(*new_card)} (sum={p_sum})")
                 if p_sum > 21:
                     player_bust = True
-                    print(f"[{ip}:{port}] Player busts -> dealer wins.")
+                    print(f"[{ip}:{port}] Player busts -> \033[32mdealer wins.\033[0m")
                     send_update(conn, P.RES_LOSS, None)  # final result
                     break
 
@@ -111,7 +110,7 @@ def handle_client(conn: socket.socket, addr, team_name: str) -> None:
                 d_sum = sum_cards(dealer)
                 print(f"[{ip}:{port}] Dealer hits: {P.card_str(*c)} (sum={d_sum})")
                 if d_sum > 21:
-                    print(f"[{ip}:{port}] Dealer busts -> client wins.")
+                    print(f"[{ip}:{port}] \033[31mDealer busts -> client wins.\033[0m")
                     send_update(conn, P.RES_WIN, None)
                     break
             else:
@@ -124,13 +123,13 @@ def handle_client(conn: socket.socket, addr, team_name: str) -> None:
                     # shouldn't happen due to loop, but keep safe
                     send_update(conn, P.RES_WIN, None)
                 elif p_sum > d_sum:
-                    print(f"[{ip}:{port}] Client wins {p_sum} vs {d_sum}.")
+                    print(f"[{ip}:{port}] \033[31mClient wins {p_sum} vs {d_sum}.\033[0m")
                     send_update(conn, P.RES_WIN, None)
                 elif p_sum < d_sum:
-                    print(f"[{ip}:{port}] Dealer wins {d_sum} vs {p_sum}.")
+                    print(f"[{ip}:{port}] \033[32mDealer wins {d_sum} vs {p_sum}.\033[0m")
                     send_update(conn, P.RES_LOSS, None)
                 else:
-                    print(f"[{ip}:{port}] Tie {p_sum} vs {d_sum}.")
+                    print(f"[{ip}:{port}] \033[34mTie {p_sum} vs {d_sum}.\033[0m")
                     send_update(conn, P.RES_TIE, None)
 
         print(f"[{ip}:{port}] Finished all rounds; closing connection.")
@@ -143,17 +142,45 @@ def handle_client(conn: socket.socket, addr, team_name: str) -> None:
         except Exception:
             pass
 
+import socket, time, threading
+
 def udp_broadcaster(stop_evt: threading.Event, udp_port: int, tcp_port: int, team_name: str) -> None:
     msg = P.pack_offer(tcp_port, team_name)
+
+    # --- detect local IP + broadcast (your style) ---
+    try:
+        t = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        t.connect(("8.8.8.8", 80))
+        local_ip = t.getsockname()[0]
+        t.close()
+
+        sepreated = local_ip.split(".")
+        sepreated[-1] = "255"
+        broadcast_ip = ".".join(sepreated)
+        print(f"Local IP: {local_ip} | Broadcast IP: {broadcast_ip}")
+
+    except Exception as e:
+        print("Failed to get local IP:", e)
+        local_ip = "127.0.0.1"
+        broadcast_ip = "127.0.0.1"
+
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # optional but helps Windows choose correct interface
+    try:
+        s.bind((local_ip, 0))
+    except OSError:
+        pass
+
     try:
         while not stop_evt.is_set():
-            s.sendto(msg, (BROADCAST_ADDR, udp_port))
+            s.sendto(msg, (broadcast_ip, udp_port))
             time.sleep(1.0)
     finally:
         s.close()
+
 
 def main():
     ap = argparse.ArgumentParser(description="Blackjack Dealer Server")
@@ -173,6 +200,7 @@ def main():
     print(f"Server started, listening on IP address {socket.gethostbyname(socket.gethostname())} (TCP port {actual_tcp_port})")
 
     stop_evt = threading.Event()
+    print("udp port is", args.udp_port)
     t = threading.Thread(target=udp_broadcaster, args=(stop_evt, args.udp_port, actual_tcp_port, args.team), daemon=True)
     t.start()
 
